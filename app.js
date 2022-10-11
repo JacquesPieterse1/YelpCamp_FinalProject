@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const mongoose = require('mongoose');
 const engine = require('ejs-mate');
+const { campgroundSchema } = require('./schemas.js');
 const catchAsync = require('./utils/catchAsync');
 const ExpressError = require('./utils/ExpressError');
 const methodOverride = require('method-override');
@@ -38,6 +39,17 @@ app.get('/campgrounds', async (req, res) => {
     res.render('campgrounds/index', { campgrounds })
 });
 
+
+const validateCampground = (req, res, next) => {
+
+    const { error } = camgroundSchema.validate(req.body);
+    if (error) {
+        const msg = error.details.map(el => el.message).join(',');
+        throw new ExpressError(msg, 400);
+    } else {
+        next();
+    }
+}
 //____________CRUD______________
 
 //Create
@@ -46,8 +58,10 @@ app.get('/campgrounds/new', (req, res) => {
 })
 
 
-app.post('/campgrounds', catchAsync(async (req, res, next) => {
-    if (!req.body.campground) throw new ExpressError('Invalid Campground Data', 400);
+app.post('/campgrounds', validateCampground, catchAsync(async (req, res, next) => {
+    // if (!req.body.campground) throw new ExpressError('Invalid Campground Data', 400);
+
+
     const campground = new Campground(req.body.campground);
     await campground.save();
     res.redirect(`/campgrounds/${campground._id}`)
@@ -67,7 +81,7 @@ app.get('/campgrounds/:id/edit', catchAsync(async (req, res) => {
     res.render('campgrounds/edit', { campground });
 }))
 
-app.put('/campgrounds/:id', catchAsync(async (req, res) => {
+app.put('/campgrounds/:id', validateCampground, catchAsync(async (req, res) => {
     const { id } = req.params;
     const campground = await Campground.findByIdAndUpdate(id, { ...req.body.campground });
     res.redirect(`/campgrounds/${campground._id}`)
@@ -84,8 +98,8 @@ app.all('*', (req, res, next) => {
     next(new ExpressError('Page Not Found', 404))
 })
 
-app.use((err, req, res) => {
-    const { statusCode = 500, message = 'Something went wrong' } = err;
+app.use((err, req, res, next) => {
+    const { statusCode = 500 } = err;
     if (!err.message) err.message = 'Oh no, something went wrong';
     res.status(statusCode).render('error', { err })
 })
